@@ -1,0 +1,8 @@
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Ignore markdown files except README
+*.md
+!README.md
