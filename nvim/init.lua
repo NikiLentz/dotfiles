@@ -306,6 +306,36 @@ require('lazy').setup({
     },
   },
 
+  { -- LazyGit integration
+    'kdheepak/lazygit.nvim',
+    cmd = {
+      'LazyGit',
+      'LazyGitConfig',
+      'LazyGitCurrentFile',
+      'LazyGitFilter',
+      'LazyGitFilterCurrentFile',
+    },
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+    },
+    keys = {
+      { '<leader>gg', '<cmd>LazyGitCurrentFile<cr>', desc = '[G]it LazyGit' },
+      {
+        '<leader>gc',
+        function()
+          local git_root = vim.fn.systemlist('git -C ' .. vim.fn.expand '%:p:h' .. ' rev-parse --show-toplevel')[1]
+          if git_root and vim.fn.isdirectory(git_root) == 1 then
+            vim.cmd('lcd ' .. git_root)
+            vim.cmd 'LazyGitFilter'
+          else
+            vim.notify('Not in a git repository', vim.log.levels.WARN)
+          end
+        end,
+        desc = '[G]it [C]ommits',
+      },
+    },
+  },
+
   -- NOTE: Plugins can also be configured to run Lua code when they are loaded.
   --
   -- This is often very useful to both group configuration, as well as handle
@@ -368,6 +398,7 @@ require('lazy').setup({
         { '<leader>s', group = '[S]earch' },
         { '<leader>t', group = '[T]oggle' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
+        { '<leader>g', group = '[G]it' },
       },
     },
   },
