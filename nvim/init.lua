@@ -97,6 +97,9 @@ vim.g.have_nerd_font = true
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
+-- Map cs filetype to c_sharp treesitter parser
+vim.treesitter.language.register('c_sharp', 'cs')
+
 -- [[ Setting options ]]
 -- See `:help vim.o`
 -- NOTE: You can change these options as you wish!
@@ -399,6 +402,7 @@ require('lazy').setup({
         { '<leader>t', group = '[T]oggle' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
         { '<leader>g', group = '[G]it' },
+        { '<leader>a', group = '[A]I (99)' },
       },
     },
   },
@@ -548,6 +552,9 @@ require('lazy').setup({
 
       -- Allows extra capabilities provided by blink.cmp
       'saghen/blink.cmp',
+
+      -- OmniSharp extended for proper C# LSP support
+      'Hoffs/omnisharp-extended-lsp.nvim',
     },
     config = function()
       -- Brief aside: **What is LSP?**
@@ -745,6 +752,7 @@ require('lazy').setup({
             "--query-driver=/Users/niki/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin/xtensa-*-gcc",
           },
         },
+
         gopls = {},
         -- pyright = {},
         -- rust_analyzer = {},
@@ -833,6 +841,15 @@ require('lazy').setup({
           end,
         },
       }
+
+      -- Setup csharp_ls manually (installed via: dotnet tool install -g csharp-ls --version 0.20.0)
+      vim.lsp.config.csharp_ls = {
+        cmd = { "csharp-ls" },
+        filetypes = { "cs" },
+        root_markers = { "*.sln", "*.csproj", ".git" },
+        capabilities = capabilities,
+      }
+      vim.lsp.enable("csharp_ls")
     end,
   },
 
@@ -924,13 +941,13 @@ require('lazy').setup({
     opts = {
       keymap = {
         -- Custom keymaps:
-        -- <C-j>: Accept completion AND jump forward in snippets
+        -- <Tab>: Accept completion AND jump forward in snippets
         -- <C-k>: Jump backward in snippets
         -- <C-space>: Open/toggle completion menu
         -- <C-n>/<C-p>: Navigate completions
         -- <C-e>: Hide menu
         preset = 'default',
-        ['<C-j>'] = { 'accept', 'snippet_forward', 'fallback' },
+        ['<Tab>'] = { 'accept', 'snippet_forward', 'fallback' },
         ['<C-k>'] = { 'snippet_backward', 'fallback' },
       },
 
@@ -949,8 +966,9 @@ require('lazy').setup({
       sources = {
         default = { 'lsp', 'path', 'snippets', 'lazydev' },
         providers = {
-          snippets = { score_offset = 200 }, -- Prioritize snippets above everything
-          lazydev = { module = 'lazydev.integrations.blink', score_offset = 100 },
+          lsp = { score_offset = 100 },
+          snippets = { score_offset = 50 },
+          lazydev = { module = 'lazydev.integrations.blink', score_offset = 90 },
         },
       },
 
@@ -985,6 +1003,70 @@ require('lazy').setup({
       vim.cmd.colorscheme 'catppuccin'
     end,
   },
+  -- 99 - Neovim AI agent (ThePrimeagen)
+  {
+    'ThePrimeagen/99',
+    config = function()
+      local _99 = require('99')
+      local cwd = vim.uv.cwd()
+      local basename = vim.fs.basename(cwd)
+
+      -- Register C# language support for 99 (must be before setup)
+      package.preload['99.language.cs'] = function()
+        return require('99-custom.cs')
+      end
+
+      _99.setup({
+        model = 'anthropic/claude-sonnet-4-5',
+        logger = {
+          level = _99.DEBUG,
+          path = '/tmp/' .. basename .. '.99.debug',
+          print_on_error = true,
+        },
+        completion = {
+          custom_rules = {},
+          source = 'blink',
+        },
+        md_files = {
+          'AGENT.md',
+          'AGENTS.md',
+        },
+      })
+
+      -- Add C# to supported languages after setup
+      local Languages = require('99.language')
+      Languages.languages['cs'] = require('99-custom.cs')
+      Languages.languages['c_sharp'] = require('99-custom.cs')
+
+      -- Patch request-context to map cs -> c_sharp for treesitter
+      local RequestContext = require('99.request-context')
+      local original_from_current_buffer = RequestContext.from_current_buffer
+      RequestContext.from_current_buffer = function(state, xid)
+        local ctx = original_from_current_buffer(state, xid)
+        if ctx.file_type == 'cs' then
+          ctx.file_type = 'c_sharp'
+        end
+        return ctx
+      end
+
+      vim.keymap.set('n', '<leader>af', function()
+        _99.fill_in_function_prompt()
+      end, { desc = '[A]I [F]ill in function (with prompt)' })
+
+      vim.keymap.set('n', '<leader>aF', function()
+        _99.fill_in_function()
+      end, { desc = '[A]I [F]ill in function (no prompt)' })
+
+      vim.keymap.set('v', '<leader>av', function()
+        _99.visual_prompt()
+      end, { desc = '[A]I [V]isual with prompt' })
+
+      vim.keymap.set('n', '<leader>as', function()
+        _99.stop_all_requests()
+      end, { desc = '[A]I [S]top all requests' })
+    end,
+  },
+
   -- github copilot
   {
     'github/copilot.vim',
@@ -992,7 +1074,7 @@ require('lazy').setup({
     config = function()
       --Enable copilot
       vim.g.copilot_no_tab_map = true
-      vim.keymap.set('i', '<Tab>', 'copilot#Accept("<CR>")', { silent = true, expr = true })
+      vim.keymap.set('i', '<C-j>', 'copilot#Accept("<CR>")', { silent = true, expr = true, replace_keycodes = false })
       -- Disable copilot for C files
       vim.g.copilot_filetypes = { c = false }
     end,
@@ -1042,21 +1124,20 @@ require('lazy').setup({
   { -- Highlight, edit, and navigate code
     'nvim-treesitter/nvim-treesitter',
     build = ':TSUpdate',
-    main = 'nvim-treesitter.configs', -- Sets main module to use for opts
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
-    opts = {
-      ensure_installed = { 'bash', 'c', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' },
-      -- Autoinstall languages that are not installed
-      auto_install = true,
-      highlight = {
-        enable = true,
-        -- Some languages depend on vim's regex highlighting system (such as Ruby) for indent rules.
-        --  If you are experiencing weird indenting issues, add the language to
-        --  the list of additional_vim_regex_highlighting and disabled languages for indent.
-        additional_vim_regex_highlighting = { 'ruby' },
-      },
-      indent = { enable = true, disable = { 'ruby' } },
-    },
+    config = function()
+      -- Install parsers for these languages
+      local ensure_installed = { 'bash', 'c', 'c_sharp', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+      require('nvim-treesitter').install(ensure_installed)
+
+      -- Enable treesitter-based highlighting and indentation (now built into Neovim)
+      vim.api.nvim_create_autocmd('FileType', {
+        callback = function(args)
+          -- Enable treesitter highlighting if parser is available
+          pcall(vim.treesitter.start, args.buf)
+        end,
+      })
+    end,
     -- There are additional nvim-treesitter modules that you can use to interact
     -- with nvim-treesitter. You should go explore a few and see what interests you:
     --

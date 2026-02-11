@@ -1,0 +1,118 @@
+# Starship Configuration
+# https://starship.rs/config/
+
+# Catppuccin Mocha palette
+palette = "catppuccin_mocha"
+
+# Prompt format - compact
+format = """$username$hostname$directory$git_branch$git_commit$git_status$python$nodejs$rust$golang$docker_context$character"""
+
+# Right prompt
+right_format = """$time"""
+
+# Wait 10ms for starship to check files
+scan_timeout = 10
+
+# Disable blank line at start
+add_newline = false
+
+[character]
+success_symbol = "[❯](green)"
+error_symbol = "[❯](red)"
+vimcmd_symbol = "[❮](lavender)"
+
+[username]
+style_user = "flamingo"
+style_root = "red"
+format = "[$user]($style_user)"
+show_always = false
+
+[hostname]
+style = "pink"
+format = "[@$hostname]($style) "
+ssh_only = true
+
+[git_commit]
+style = "overlay1"
+format = "[($hash)]($style) "
+only_detached = false
+tag_disabled = true
+commit_hash_length = 7
+
+[directory]
+style = "blue"
+truncation_length = 3
+truncate_to_repo = true
+read_only = " "
+format = "[$path]($style)[$read_only]($read_only_style) "
+repo_root_style = "sapphire bold"
+repo_root_format = "[$repo_root]($repo_root_style)[$path]($style)[$read_only]($read_only_style) "
+
+[git_branch]
+style = "mauve"
+format = "[$symbol$branch]($style) "
+symbol = " "
+
+[git_status]
+style = "maroon"
+format = '([$all_status$ahead_behind]($style) )'
+
+[time]
+disabled = false
+style = "overlay0"
+format = "[$time]($style)"
+time_format = "%H:%M"
+
+[python]
+style = "yellow"
+format = '[${symbol}${pyenv_prefix}(${version} )(\($virtualenv\) )]($style)'
+symbol = " "
+
+[nodejs]
+style = "green"
+format = "[$symbol($version )]($style)"
+symbol = " "
+
+[rust]
+style = "peach"
+format = "[$symbol($version )]($style)"
+symbol = " "
+
+[golang]
+style = "teal"
+format = "[$symbol($version )]($style)"
+symbol = " "
+
+[docker_context]
+style = "blue"
+format = "[$symbol$context]($style) "
+symbol = " "
+
+# Catppuccin Mocha color palette
+[palettes.catppuccin_mocha]
+rosewater = "#f5e0dc"
+flamingo = "#f2cdcd"
+pink = "#f5c2e7"
+mauve = "#cba6f7"
+red = "#f38ba8"
+maroon = "#eba0ac"
+peach = "#fab387"
+yellow = "#f9e2af"
+green = "#a6e3a1"
+teal = "#94e2d5"
+sky = "#89dceb"
+sapphire = "#74c7ec"
+blue = "#89b4fa"
+lavender = "#b4befe"
+text = "#cdd6f4"
+subtext1 = "#bac2de"
+subtext0 = "#a6adc8"
+overlay2 = "#9399b2"
+overlay1 = "#7f849c"
+overlay0 = "#6c7086"
+surface2 = "#585b70"
+surface1 = "#45475a"
+surface0 = "#313244"
+base = "#1e1e2e"
+mantle = "#181825"
+crust = "#11111b"
