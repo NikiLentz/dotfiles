@@ -5,6 +5,7 @@
 # ============================================================================
 [ -d "$HOME/bin" ] && PATH="$HOME/bin:$PATH"
 [ -d "$HOME/.local/bin" ] && PATH="$HOME/.local/bin:$PATH"
+[ -d "/opt/mssql-tools18/bin" ] && PATH="/opt/mssql-tools18/bin:$PATH"
 export PATH
 
 # ============================================================================
