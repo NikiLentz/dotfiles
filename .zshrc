@@ -3,6 +3,7 @@
 # ============================================================================
 # PATH Configuration (also in .zprofile for login shells)
 # ============================================================================
+[[ "$(uname)" == "Darwin" ]] && [ -d "/opt/homebrew/bin" ] && PATH="/opt/homebrew/bin:$PATH"
 [ -d "$HOME/bin" ] && PATH="$HOME/bin:$PATH"
 [ -d "$HOME/.local/bin" ] && PATH="$HOME/.local/bin:$PATH"
 [ -d "/opt/mssql-tools18/bin" ] && PATH="/opt/mssql-tools18/bin:$PATH"
