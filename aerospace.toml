@@ -66,7 +66,7 @@ automatically-unhide-macos-hidden-apps = true
 
     # App launchers
     alt-b = 'exec-and-forget open -nb app.zen-browser.zen'
-    alt-t = 'exec-and-forget open -nb com.mitchellh.ghostty'
+    alt-t = 'exec-and-forget /Applications/Ghostty.app/Contents/MacOS/ghostty'
     alt-s = 'exec-and-forget open -b com.spotify.client'
     alt-f = 'exec-and-forget open -nb com.apple.finder'
     alt-g = 'layout floating tiling'

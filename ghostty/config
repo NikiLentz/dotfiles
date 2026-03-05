@@ -13,6 +13,9 @@ window-padding-y = 10
 font-family = MesloLGM Nerd Font Mono
 font-size = 12
 
+# Platform-specific overrides
+config-file = config-macos
+
 # Send CSI u sequences for Ctrl+J/K so nvim can distinguish them from Enter
 keybind = ctrl+j=text:\x1b[106;5u
 keybind = ctrl+k=text:\x1b[107;5u
