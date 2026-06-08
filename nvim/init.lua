@@ -191,10 +191,10 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 vim.keymap.set('n', ']d', vim.diagnostic.goto_next, { desc = 'Go to next [D]iagnostic message' })
 vim.keymap.set('n', '[d', vim.diagnostic.goto_prev, { desc = 'Go to previous [D]iagnostic message' })
 vim.keymap.set('n', ']e', function()
-  vim.diagnostic.goto_next({ severity = vim.diagnostic.severity.ERROR })
+  vim.diagnostic.goto_next { severity = vim.diagnostic.severity.ERROR }
 end, { desc = 'Go to next [E]rror' })
 vim.keymap.set('n', '[e', function()
-  vim.diagnostic.goto_prev({ severity = vim.diagnostic.severity.ERROR })
+  vim.diagnostic.goto_prev { severity = vim.diagnostic.severity.ERROR }
 end, { desc = 'Go to previous [E]rror' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
@@ -220,10 +220,10 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
-vim.keymap.set("n", "=", [[<cmd>vertical resize +5<cr>]]) -- make the window biger vertically
-vim.keymap.set("n", "-", [[<cmd>vertical resize -5<cr>]]) -- make the window smaller vertically
-vim.keymap.set("n", "+", [[<cmd>horizontal resize +2<cr>]]) -- make the window bigger horizontally by pressing shift and =
-vim.keymap.set("n", "_", [[<cmd>horizontal resize -2<cr>]]) -- make the window smaller horizontally by pressing shift and -
+vim.keymap.set('n', '=', [[<cmd>vertical resize +5<cr>]]) -- make the window biger vertically
+vim.keymap.set('n', '-', [[<cmd>vertical resize -5<cr>]]) -- make the window smaller vertically
+vim.keymap.set('n', '+', [[<cmd>horizontal resize +2<cr>]]) -- make the window bigger horizontally by pressing shift and =
+vim.keymap.set('n', '_', [[<cmd>horizontal resize -2<cr>]]) -- make the window smaller horizontally by pressing shift and -
 
 -- NOTE: Some terminals have colliding keymaps or are not able to send distinct keycodes
 -- vim.keymap.set("n", "<C-S-h>", "<C-w>H", { desc = "Move window to the left" })
@@ -471,8 +471,10 @@ require('lazy').setup({
         -- pickers = }
         defaults = {
           file_ignore_patterns = {
-            "node_modules"
-          }
+            'node_modules',
+          },
+
+          path_display = { 'truncate' },
         },
         extensions = {
           ['ui-select'] = {
@@ -638,12 +640,13 @@ require('lazy').setup({
 
           -- Add missing imports (TypeScript/JavaScript)
           map('<leader>ci', function()
-            vim.lsp.buf.code_action({
+            vim.lsp.buf.code_action {
               apply = true,
               context = {
                 only = { 'source.addMissingImports.ts' },
                 diagnostics = {},
-              },            })
+              },
+            }
           end, '[C]ode Add Missing [I]mports')
 
           -- This function resolves a difference between neovim nightly (version 0.11) and stable (version 0.10)
@@ -747,9 +750,9 @@ require('lazy').setup({
       local servers = {
         clangd = {
           cmd = {
-            "/opt/homebrew/opt/llvm/bin/clangd",
-            "--background-index",
-            "--query-driver=/Users/niki/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin/xtensa-*-gcc",
+            '/opt/homebrew/opt/llvm/bin/clangd',
+            '--background-index',
+            '--query-driver=/Users/niki/.espressif/tools/xtensa-esp-elf/*/xtensa-esp-elf/bin/xtensa-*-gcc',
           },
         },
 
@@ -821,7 +824,7 @@ require('lazy').setup({
       -- for you, so that they are available from within Neovim.
       local ensure_installed = vim.tbl_keys(servers or {})
       vim.list_extend(ensure_installed, {
-        'stylua',   -- Used to format Lua code
+        'stylua', -- Used to format Lua code
         'eslint_d', -- Add this line
       })
 
@@ -844,12 +847,12 @@ require('lazy').setup({
 
       -- Setup csharp_ls manually (installed via: dotnet tool install -g csharp-ls --version 0.20.0)
       vim.lsp.config.csharp_ls = {
-        cmd = { "csharp-ls" },
-        filetypes = { "cs" },
-        root_markers = { "*.sln", "*.csproj", ".git" },
+        cmd = { 'csharp-ls' },
+        filetypes = { 'cs' },
+        root_markers = { '*.sln', '*.csproj', '.git' },
         capabilities = capabilities,
       }
-      vim.lsp.enable("csharp_ls")
+      vim.lsp.enable 'csharp_ls'
     end,
   },
 
@@ -931,7 +934,7 @@ require('lazy').setup({
         },
         config = function()
           -- Load custom snippets
-          require("luasnip.loaders.from_lua").lazy_load({ paths = "~/.config/nvim/lua/snippets" })
+          require('luasnip.loaders.from_lua').lazy_load { paths = '~/.config/nvim/lua/snippets' }
         end,
       },
       'folke/lazydev.nvim',
@@ -993,13 +996,13 @@ require('lazy').setup({
     name = 'catppuccin',
     priority = 1000,
     config = function()
-      require('catppuccin').setup({
+      require('catppuccin').setup {
         flavour = 'mocha', -- latte, frappe, macchiato, mocha
         styles = {
           comments = { 'italic' },
           conditional = {},
         },
-      })
+      }
       vim.cmd.colorscheme 'catppuccin'
     end,
   },
@@ -1007,16 +1010,16 @@ require('lazy').setup({
   {
     'ThePrimeagen/99',
     config = function()
-      local _99 = require('99')
+      local _99 = require '99'
       local cwd = vim.uv.cwd()
       local basename = vim.fs.basename(cwd)
 
       -- Register C# language support for 99 (must be before setup)
       package.preload['99.language.cs'] = function()
-        return require('99-custom.cs')
+        return require '99-custom.cs'
       end
 
-      _99.setup({
+      _99.setup {
         model = 'anthropic/claude-sonnet-4-5',
         logger = {
           level = _99.DEBUG,
@@ -1031,15 +1034,15 @@ require('lazy').setup({
           'AGENT.md',
           'AGENTS.md',
         },
-      })
+      }
 
       -- Add C# to supported languages after setup
-      local Languages = require('99.language')
-      Languages.languages['cs'] = require('99-custom.cs')
-      Languages.languages['c_sharp'] = require('99-custom.cs')
+      local Languages = require '99.language'
+      Languages.languages['cs'] = require '99-custom.cs'
+      Languages.languages['c_sharp'] = require '99-custom.cs'
 
       -- Patch request-context to map cs -> c_sharp for treesitter
-      local RequestContext = require('99.request-context')
+      local RequestContext = require '99.request-context'
       local original_from_current_buffer = RequestContext.from_current_buffer
       RequestContext.from_current_buffer = function(state, xid)
         local ctx = original_from_current_buffer(state, xid)
@@ -1068,18 +1071,17 @@ require('lazy').setup({
   },
 
   -- github copilot
-  {
-    'github/copilot.vim',
-    event = 'VimEnter',
-    config = function()
-      --Enable copilot
-      vim.g.copilot_no_tab_map = true
-      vim.keymap.set('i', '<C-j>', 'copilot#Accept("<CR>")', { silent = true, expr = true, replace_keycodes = false })
-      -- Disable copilot for C files
-      vim.g.copilot_filetypes = { c = false }
-    end,
-  },
-
+  -- {
+  --   'github/copilot.vim',
+  --   event = 'VimEnter',
+  --   config = function()
+  --     --Enable copilot
+  --     vim.g.copilot_no_tab_map = true
+  --     vim.keymap.set('i', '<C-j>', 'copilot#Accept("<CR>")', { silent = true, expr = true, replace_keycodes = false })
+  --     -- Disable copilot for C files
+  --     vim.g.copilot_filetypes = { c = false }
+  --   end,
+  -- },
 
   -- Highlight todo, notes, etc in comments
   { 'folke/todo-comments.nvim', event = 'VimEnter', dependencies = { 'nvim-lua/plenary.nvim' }, opts = { signs = false } },
