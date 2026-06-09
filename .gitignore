@@ -2,6 +2,7 @@
 *.swp
 *.swo
 *~
+.zprofile
 
 # Ignore markdown files except README
 *.md
