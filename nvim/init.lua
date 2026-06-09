@@ -213,6 +213,36 @@ vim.keymap.set('n', '[q', '<cmd>cprev<cr>', { desc = 'Previous [Q]uickfix item' 
 vim.keymap.set('n', '<leader>co', '<cmd>copen<cr>', { desc = '[C]uickfix [O]pen' })
 vim.keymap.set('n', '<leader>cc', '<cmd>cclose<cr>', { desc = '[C]uickfix [C]lose' })
 
+-- Eagerly start the language servers for a polyglot project (e.g. C# + TS) when
+-- you open Neovim in the project root, so workspace-symbol search (gW) covers
+-- every language immediately -- without first opening a file of each type.
+-- It loads one hidden, unlisted buffer per language, which fires the normal
+-- filetype-based LSP auto-attach (so roots are correct and no clients are duplicated).
+vim.api.nvim_create_autocmd('VimEnter', {
+  desc = 'Eager-load C#/TS language servers in a polyglot project',
+  group = vim.api.nvim_create_augroup('eager-project-lsp', { clear = true }),
+  callback = function()
+    local root = vim.fn.getcwd()
+    -- Only inside a git repo, to avoid scanning large unrelated directory trees.
+    if vim.fn.isdirectory(root .. '/.git') == 0 then
+      return
+    end
+    -- Defer so startup UI is not blocked by the filesystem search / server spawn.
+    vim.schedule(function()
+      local function preload(ext)
+        local hit = vim.fs.find(function(name)
+          return name:sub(-#ext) == ext
+        end, { path = root, type = 'file', limit = 1 })[1]
+        if hit then
+          pcall(vim.fn.bufload, vim.fn.bufadd(hit))
+        end
+      end
+      preload '.cs'
+      preload '.ts'
+    end)
+  end,
+})
+
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
 -- is not what someone will guess without a bit more experience.
@@ -493,6 +523,17 @@ require('lazy').setup({
 
           path_display = { 'truncate' },
         },
+        pickers = {
+          -- Document symbols (gO / <leader>sm): symbol + just the filename.
+          -- Widths are fractions of the picker width, so the columns scale with
+          -- the terminal size instead of being fixed character counts.
+          lsp_document_symbols = {
+            path_display = { 'tail' },
+            symbol_width = 0.7,
+            fname_width = 0.3,
+            show_line = false,
+          },
+        },
         extensions = {
           ['ui-select'] = {
             require('telescope.themes').get_dropdown(),
@@ -604,6 +645,112 @@ require('lazy').setup({
       -- If you're wondering about lsp vs treesitter, you can check out the wonderfully
       -- and elegantly composed help section, `:help lsp-vs-treesitter`
 
+      -- Workspace-symbol search across ALL active LSP servers at once (e.g. C#
+      -- via csharp_ls AND TypeScript via ts_ls), instead of only the server
+      -- attached to the current buffer. Used by the `gW` keymap below.
+      --
+      -- Custom row layout:
+      --   <method name (with class + params)>   <return type>   <kind>
+      -- csharp_ls returns symbol names as "ReturnType Class.Method(params)", so
+      -- we strip the leading return type into its own column. Column widths are
+      -- fractions of the picker width, so the layout scales with the terminal
+      -- size; long method names are truncated to their column.
+      local function workspace_symbols_all_clients()
+        local clients = vim.tbl_filter(function(c)
+          return c.server_capabilities and c.server_capabilities.workspaceSymbolProvider
+        end, vim.lsp.get_clients())
+        if vim.tbl_isempty(clients) then
+          vim.notify('No active LSP server supports workspace symbols', vim.log.levels.WARN)
+          return
+        end
+
+        local pickers = require 'telescope.pickers'
+        local finders = require 'telescope.finders'
+        local conf = require('telescope.config').values
+        local entry_display = require 'telescope.pickers.entry_display'
+        local kinds = vim.lsp.protocol.SymbolKind
+
+        local displayer = entry_display.create {
+          separator = '  ',
+          -- Fractional widths: each column is a share of the picker's current
+          -- width, so the layout scales with the terminal (Mac laptop, a quarter
+          -- of a 4K screen, or fullscreen) and re-flows on resize.
+          items = {
+            { width = 0.5 }, -- method name (with class + params)
+            { width = 0.2 }, -- return type
+            { remaining = true }, -- kind
+          },
+        }
+
+        local function make_display(entry)
+          return displayer {
+            entry.symbol_name,
+            { entry.return_type, 'TelescopeResultsComment' },
+            { entry.kind, 'TelescopeResultsField' },
+          }
+        end
+
+        -- Split a "ReturnType Class.Method(params)" string into return type and
+        -- the rest, on the first space at bracket depth 0 (so generics such as
+        -- `Task<IActionResult>` or `Dictionary<int, string>` stay intact). When
+        -- there is no top-level space (e.g. a class name, or a TS symbol), the
+        -- whole string is the name and the return type is empty.
+        local function split_return_type(full)
+          local depth = 0
+          for idx = 1, #full do
+            local ch = full:sub(idx, idx)
+            if ch == '<' or ch == '(' or ch == '[' then
+              depth = depth + 1
+            elseif ch == '>' or ch == ')' or ch == ']' then
+              depth = depth - 1
+            elseif ch == ' ' and depth == 0 then
+              return full:sub(1, idx - 1), full:sub(idx + 1)
+            end
+          end
+          return '', full
+        end
+
+        local function entry_maker(item)
+          local return_type, name = split_return_type(item.name)
+          local path = vim.uri_to_fname(item.location.uri)
+          local pos = (item.location.range or {}).start or { line = 0, character = 0 }
+          return {
+            value = item,
+            ordinal = item.name,
+            display = make_display,
+            symbol_name = name,
+            return_type = return_type,
+            kind = kinds[item.kind] or '',
+            -- used to open / preview:
+            filename = path,
+            lnum = pos.line + 1,
+            col = pos.character + 1,
+          }
+        end
+
+        pickers
+          .new({}, {
+            prompt_title = 'Workspace Symbols (all LSPs)',
+            finder = finders.new_dynamic {
+              entry_maker = entry_maker,
+              fn = function(prompt)
+                local results = {}
+                for _, client in ipairs(clients) do
+                  local bufnr = next(client.attached_buffers or {}) or 0
+                  local resp = client:request_sync('workspace/symbol', { query = prompt or '' }, 3000, bufnr)
+                  if resp and resp.result then
+                    vim.list_extend(results, resp.result)
+                  end
+                end
+                return results
+              end,
+            },
+            previewer = conf.qflist_previewer {},
+            sorter = conf.generic_sorter {},
+          })
+          :find()
+      end
+
       --  This function gets run when an LSP attaches to a particular buffer.
       --    That is to say, every time a new file is opened that is associated with
       --    an lsp (for example, opening `main.rs` is associated with `rust_analyzer`) this
@@ -651,7 +798,7 @@ require('lazy').setup({
 
           -- Fuzzy find all the symbols in your current workspace.
           --  Similar to document symbols, except searches over your entire project.
-          map('gW', require('telescope.builtin').lsp_dynamic_workspace_symbols, 'Open Workspace Symbols')
+          map('gW', workspace_symbols_all_clients, 'Open Workspace Symbols (all LSPs)')
 
           -- Jump to the type of the word under your cursor.
           --  Useful when you're not sure what type a variable is and you want to see
