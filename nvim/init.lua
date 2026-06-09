@@ -196,6 +196,22 @@ end, { desc = 'Go to next [E]rror' })
 vim.keymap.set('n', '[e', function()
   vim.diagnostic.goto_prev { severity = vim.diagnostic.severity.ERROR }
 end, { desc = 'Go to previous [E]rror' })
+vim.keymap.set('n', '<leader>e', vim.diagnostic.open_float, { desc = 'Show diagnostic [E]rror float' })
+-- Toggle the inline full-message virtual_lines on/off (it can crowd dense code).
+vim.keymap.set('n', '<leader>tl', function()
+  local cfg = vim.diagnostic.config()
+  if cfg.virtual_lines then
+    vim.diagnostic.config { virtual_lines = false }
+  else
+    vim.diagnostic.config { virtual_lines = { current_line = true } }
+  end
+end, { desc = '[T]oggle diagnostic virtual [L]ines' })
+
+-- Quickfix list navigation (used by the dotnet build → quickfix workflow)
+vim.keymap.set('n', ']q', '<cmd>cnext<cr>', { desc = 'Next [Q]uickfix item' })
+vim.keymap.set('n', '[q', '<cmd>cprev<cr>', { desc = 'Previous [Q]uickfix item' })
+vim.keymap.set('n', '<leader>co', '<cmd>copen<cr>', { desc = '[C]uickfix [O]pen' })
+vim.keymap.set('n', '<leader>cc', '<cmd>cclose<cr>', { desc = '[C]uickfix [C]lose' })
 
 -- Exit terminal mode in the builtin terminal with a shortcut that is a bit easier
 -- for people to discover. Otherwise, you normally need to press <C-\><C-n>, which
@@ -402,7 +418,8 @@ require('lazy').setup({
         { '<leader>t', group = '[T]oggle' },
         { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
         { '<leader>g', group = '[G]it' },
-        { '<leader>a', group = '[A]I (99)' },
+        { '<leader>x', group = 'Trouble / Diagnostics' },
+        { '<leader>c', group = '[C]ode / Quickfix' },
       },
     },
   },
@@ -496,6 +513,9 @@ require('lazy').setup({
       vim.keymap.set('n', '<leader>sw', builtin.grep_string, { desc = '[S]earch current [W]ord' })
       vim.keymap.set('n', '<leader>sg', builtin.live_grep, { desc = '[S]earch by [G]rep' })
       vim.keymap.set('n', '<leader>sd', builtin.diagnostics, { desc = '[S]earch [D]iagnostics' })
+      -- Fuzzy-jump to any function/method/symbol in the current file (case-insensitive).
+      -- Also available as `gO` (document) and `gW` (whole workspace) via the LSP keymaps.
+      vim.keymap.set('n', '<leader>sm', builtin.lsp_document_symbols, { desc = '[S]earch [M]ethods/symbols (file)' })
       vim.keymap.set('n', '<leader>sr', builtin.resume, { desc = '[S]earch [R]esume' })
       vim.keymap.set('n', '<leader>s.', builtin.oldfiles, { desc = '[S]earch Recent Files ("." for repeat)' })
       vim.keymap.set('n', '<leader><leader>', builtin.buffers, { desc = '[ ] Find existing buffers' })
@@ -709,6 +729,10 @@ require('lazy').setup({
         severity_sort = true,
         float = { border = 'rounded', source = 'if_many' },
         underline = { severity = vim.diagnostic.severity.ERROR },
+        -- Render the full diagnostic text on its own line(s) under the current
+        -- line, so long LSP error messages are no longer truncated.
+        -- Toggle with <leader>tl (see diagnostic keymaps).
+        virtual_lines = { current_line = true },
         signs = vim.g.have_nerd_font and {
           text = {
             [vim.diagnostic.severity.ERROR] = '󰅚 ',
@@ -853,6 +877,21 @@ require('lazy').setup({
         capabilities = capabilities,
       }
       vim.lsp.enable 'csharp_ls'
+
+      -- Build C# directly from Neovim. `<leader>b` saves all buffers and runs
+      -- `dotnet build`; compile errors/warnings are parsed into the quickfix
+      -- list. Jump through them with ]q / [q, or view them via <leader>co
+      -- (or Trouble's <leader>xq).
+      vim.api.nvim_create_autocmd('FileType', {
+        pattern = 'cs',
+        group = vim.api.nvim_create_augroup('csharp-build', { clear = true }),
+        callback = function(event)
+          vim.bo[event.buf].makeprg = 'dotnet build'
+          -- Matches: Program.cs(10,17): error CS1002: ; expected [/path/proj.csproj]
+          vim.bo[event.buf].errorformat = '%f(%l\\,%c): %t%*[^:]: %m'
+          vim.keymap.set('n', '<leader>b', '<cmd>wa<bar>make<cr>', { buffer = event.buf, desc = '[B]uild (dotnet)' })
+        end,
+      })
     end,
   },
 
@@ -925,12 +964,12 @@ require('lazy').setup({
           -- `friendly-snippets` contains a variety of premade snippets.
           --    See the README about individual language/framework/plugin snippets:
           --    https://github.com/rafamadriz/friendly-snippets
-          -- {
-          --   'rafamadriz/friendly-snippets',
-          --   config = function()
-          --     require('luasnip.loaders.from_vscode').lazy_load()
-          --   end,
-          -- },
+          {
+            'rafamadriz/friendly-snippets',
+            config = function()
+              require('luasnip.loaders.from_vscode').lazy_load()
+            end,
+          },
         },
         config = function()
           -- Load custom snippets
@@ -961,9 +1000,25 @@ require('lazy').setup({
       },
 
       completion = {
-        -- By default, you may press `<c-space>` to show the documentation.
-        -- Optionally, set `auto_show = true` to show the documentation after a delay.
-        documentation = { auto_show = false, auto_show_delay_ms = 500 },
+        -- Documentation window: shown automatically to the side of the menu
+        -- after a short delay. Press `<c-space>` to toggle it manually too.
+        documentation = {
+          auto_show = true,
+          auto_show_delay_ms = 200,
+          window = { border = 'rounded' },
+        },
+        -- A nicer-looking, bordered completion menu with columns:
+        --   left:  kind icon + label + brief description
+        --   right: kind name + source (LSP / Snippets / Path)
+        menu = {
+          border = 'rounded',
+          draw = {
+            columns = {
+              { 'kind_icon', 'label', 'label_description', gap = 1 },
+              { 'kind', 'source_name', gap = 1 },
+            },
+          },
+        },
       },
 
       sources = {
@@ -1006,70 +1061,6 @@ require('lazy').setup({
       vim.cmd.colorscheme 'catppuccin'
     end,
   },
-  -- 99 - Neovim AI agent (ThePrimeagen)
-  {
-    'ThePrimeagen/99',
-    config = function()
-      local _99 = require '99'
-      local cwd = vim.uv.cwd()
-      local basename = vim.fs.basename(cwd)
-
-      -- Register C# language support for 99 (must be before setup)
-      package.preload['99.language.cs'] = function()
-        return require '99-custom.cs'
-      end
-
-      _99.setup {
-        model = 'anthropic/claude-sonnet-4-5',
-        logger = {
-          level = _99.DEBUG,
-          path = '/tmp/' .. basename .. '.99.debug',
-          print_on_error = true,
-        },
-        completion = {
-          custom_rules = {},
-          source = 'blink',
-        },
-        md_files = {
-          'AGENT.md',
-          'AGENTS.md',
-        },
-      }
-
-      -- Add C# to supported languages after setup
-      local Languages = require '99.language'
-      Languages.languages['cs'] = require '99-custom.cs'
-      Languages.languages['c_sharp'] = require '99-custom.cs'
-
-      -- Patch request-context to map cs -> c_sharp for treesitter
-      local RequestContext = require '99.request-context'
-      local original_from_current_buffer = RequestContext.from_current_buffer
-      RequestContext.from_current_buffer = function(state, xid)
-        local ctx = original_from_current_buffer(state, xid)
-        if ctx.file_type == 'cs' then
-          ctx.file_type = 'c_sharp'
-        end
-        return ctx
-      end
-
-      vim.keymap.set('n', '<leader>af', function()
-        _99.fill_in_function_prompt()
-      end, { desc = '[A]I [F]ill in function (with prompt)' })
-
-      vim.keymap.set('n', '<leader>aF', function()
-        _99.fill_in_function()
-      end, { desc = '[A]I [F]ill in function (no prompt)' })
-
-      vim.keymap.set('v', '<leader>av', function()
-        _99.visual_prompt()
-      end, { desc = '[A]I [V]isual with prompt' })
-
-      vim.keymap.set('n', '<leader>as', function()
-        _99.stop_all_requests()
-      end, { desc = '[A]I [S]top all requests' })
-    end,
-  },
-
   -- github copilot
   -- {
   --   'github/copilot.vim',
@@ -1168,7 +1159,7 @@ require('lazy').setup({
   --    This is the easiest way to modularize your config.
   --
   --  Uncomment the following line and add your plugins to `lua/custom/plugins/*.lua` to get going.
-  -- { import = 'custom.plugins' },
+  { import = 'custom.plugins' },
   --
   -- For additional information with loading, sourcing and examples see `:help lazy.nvim-🔌-plugin-spec`
   -- Or use telescope!
