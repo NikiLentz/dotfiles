@@ -97,6 +97,24 @@ vim.g.have_nerd_font = true
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
+-- Compat shim: nvim-treesitter's `main` branch uses `vim.list.unique` during
+-- parser installs, but that API only exists on Neovim 0.12+ (nightly). Without
+-- this, `:TSUpdate` / installing any new parser crashes on Neovim 0.11.x, which
+-- silently leaves parsers like `svelte` uninstalled (no highlighting).
+if not (vim.list and vim.list.unique) then
+  vim.list = vim.list or {}
+  vim.list.unique = function(t)
+    local seen, out = {}, {}
+    for _, v in ipairs(t) do
+      if not seen[v] then
+        seen[v] = true
+        out[#out + 1] = v
+      end
+    end
+    return out
+  end
+end
+
 -- Map cs filetype to c_sharp treesitter parser
 vim.treesitter.language.register('c_sharp', 'cs')
 
@@ -265,6 +283,10 @@ vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left wind
 vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
+vim.keymap.set('n', '<A-h>', '<C-w><C-h>', { desc = 'Move focus to the left window' })
+vim.keymap.set('n', '<A-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
+vim.keymap.set('n', '<A-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
+vim.keymap.set('n', '<A-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
 vim.keymap.set('n', '=', [[<cmd>vertical resize +5<cr>]]) -- make the window biger vertically
 vim.keymap.set('n', '-', [[<cmd>vertical resize -5<cr>]]) -- make the window smaller vertically
@@ -672,9 +694,6 @@ require('lazy').setup({
 
         local displayer = entry_display.create {
           separator = '  ',
-          -- Fractional widths: each column is a share of the picker's current
-          -- width, so the layout scales with the terminal (Mac laptop, a quarter
-          -- of a 4K screen, or fullscreen) and re-flows on resize.
           items = {
             { width = 0.5 }, -- method name (with class + params)
             { width = 0.2 }, -- return type
@@ -876,10 +895,9 @@ require('lazy').setup({
         severity_sort = true,
         float = { border = 'rounded', source = 'if_many' },
         underline = { severity = vim.diagnostic.severity.ERROR },
-        -- Render the full diagnostic text on its own line(s) under the current
-        -- line, so long LSP error messages are no longer truncated.
-        -- Toggle with <leader>tl (see diagnostic keymaps).
-        virtual_lines = { current_line = true },
+        -- Full diagnostic text on lines below the current line is off by
+        -- default; toggle it on with <leader>tl (see diagnostic keymaps).
+        virtual_lines = false,
         signs = vim.g.have_nerd_font and {
           text = {
             [vim.diagnostic.severity.ERROR] = '󰅚 ',
@@ -928,6 +946,7 @@ require('lazy').setup({
         },
 
         gopls = {},
+        svelte = {},
         -- pyright = {},
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
@@ -997,6 +1016,7 @@ require('lazy').setup({
       vim.list_extend(ensure_installed, {
         'stylua', -- Used to format Lua code
         'eslint_d', -- Add this line
+        'prettierd', -- Formats JS/TS (incl. standalone files with no eslint config)
       })
 
       require('mason-tool-installer').setup { ensure_installed = ensure_installed }
@@ -1081,10 +1101,31 @@ require('lazy').setup({
       end,
       formatters_by_ft = {
         lua = { 'stylua' },
-        javascript = { 'eslint_d' },
-        javascriptreact = { 'eslint_d' },
-        typescript = { 'eslint_d' },
-        typescriptreact = { 'eslint_d' },
+        javascript = { 'eslint_d', 'prettierd' },
+        javascriptreact = { 'eslint_d', 'prettierd' },
+        typescript = { 'eslint_d', 'prettierd' },
+        typescriptreact = { 'eslint_d', 'prettierd' },
+      },
+      formatters = {
+        -- Only run eslint_d when the project actually has an ESLint config,
+        -- otherwise it errors and aborts the whole format chain (e.g. on
+        -- standalone PocketBase *.pb.js hooks that have no eslint setup).
+        eslint_d = {
+          condition = function(_, ctx)
+            return vim.fs.find({
+              '.eslintrc',
+              '.eslintrc.js',
+              '.eslintrc.cjs',
+              '.eslintrc.json',
+              '.eslintrc.yaml',
+              '.eslintrc.yml',
+              'eslint.config.js',
+              'eslint.config.mjs',
+              'eslint.config.cjs',
+              'eslint.config.ts',
+            }, { upward = true, path = ctx.dirname })[1] ~= nil
+          end,
+        },
       },
     },
   },
@@ -1150,7 +1191,7 @@ require('lazy').setup({
         -- Documentation window: shown automatically to the side of the menu
         -- after a short delay. Press `<c-space>` to toggle it manually too.
         documentation = {
-          auto_show = false,
+          auto_show = true,
           auto_show_delay_ms = 200,
           window = { border = 'rounded' },
         },
@@ -1267,7 +1308,7 @@ require('lazy').setup({
     -- [[ Configure Treesitter ]] See `:help nvim-treesitter`
     config = function()
       -- Install parsers for these languages
-      local ensure_installed = { 'bash', 'c', 'c_sharp', 'diff', 'html', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'vim', 'vimdoc' }
+      local ensure_installed = { 'bash', 'c', 'c_sharp', 'css', 'diff', 'html', 'javascript', 'lua', 'luadoc', 'markdown', 'markdown_inline', 'query', 'svelte', 'typescript', 'vim', 'vimdoc' }
       require('nvim-treesitter').install(ensure_installed)
 
       -- Enable treesitter-based highlighting and indentation (now built into Neovim)

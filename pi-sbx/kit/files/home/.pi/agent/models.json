@@ -1,0 +1,15 @@
+{
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://host.docker.internal:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "qwen3.8-128k:27b", "name": "Qwen 3.8 27B 128k (Ollama)", "contextWindow": 131072, "maxTokens": 32768, "reasoning": true },
+        { "id": "qwen3.8-q3-unsloth-64k:27b", "name": "Qwen 3.8 27B Q3 Unsloth 64k (Ollama)", "contextWindow": 65536, "maxTokens": 32768, "reasoning": true },
+        { "id": "qwen3.8-q3-unsloth-32k:27b", "name": "Qwen 3.8 27B Q3 Unsloth 32k (Ollama)", "contextWindow": 32768, "maxTokens": 16384, "reasoning": true },
+        { "id": "qwen3.8-abliterated-q3-32k:27b", "name": "Qwen 3.8 27B Abliterated Q3 32k (Ollama)", "contextWindow": 32768, "maxTokens": 16384, "reasoning": true }
+      ]
+    }
+  }
+}

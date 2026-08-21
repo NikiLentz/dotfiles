@@ -106,6 +106,8 @@ alias du='du -h'
 alias free='free -h'
 alias ports='ss -tulanp'
 
+#idf py
+alias get_idf='. ~/Development/esp32/esp-idf/export.sh'
 # ============================================================================
 # Lesspipe (better less support)
 # ============================================================================
@@ -141,3 +143,6 @@ eval "$(starship init zsh)"
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
+
+llm-stop() { ollama ps | awk 'NR>1{print $1}' | xargs -r -I{} ollama stop {}; }

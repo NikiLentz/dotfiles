@@ -1,0 +1,72 @@
+# Sandbox kit: vanilla pi coding agent (per pi docs) talking to the host's Ollama.
+# host.docker.internal is mapped by sbx to the host's localhost, so the
+# 127.0.0.1-bound Ollama is reachable; the egress policy sees that traffic as
+# "localhost:11434" (both forms allowed below). Model/provider config is
+# bundled under files/home/ and lands in /home/agent/.pi/agent/ at sandbox
+# creation: models.json registers the Ollama models, settings.json selects
+# the default so pi starts without an interactive model prompt.
+schemaVersion: "1"
+kind: sandbox
+name: pi
+displayName: Pi
+description: Vanilla pi coding agent (no extensions) using host Ollama.
+
+sandbox:
+  image: "docker/sandbox-templates:shell"
+  aiFilename: AGENTS.md
+  entrypoint:
+    run: [pi]
+
+caps:
+  network:
+    # Global whitelist for all pi sandboxes. Curated: model backend, package
+    # registries, pi's fd/rg helper downloads, docs, and search. Everything
+    # else stays blocked by the deny-all global policy — extend deliberately.
+    allow:
+      # host Ollama (host.docker.internal is seen by the proxy as localhost)
+      - "localhost:11434"
+      - "host.docker.internal:11434"
+      # Ubuntu apt mirrors (read-only; lets pi sudo apt-get install on its own)
+      - "archive.ubuntu.com:80"
+      - "archive.ubuntu.com:443"
+      - "security.ubuntu.com:80"
+      - "security.ubuntu.com:443"
+      # package registries
+      - "download.docker.com:443"
+      - "registry.npmjs.org:443"
+      - "pypi.org:443"
+      - "files.pythonhosted.org:443"
+      - "crates.io:443"
+      - "index.crates.io:443"
+      - "static.crates.io:443"
+      - "proxy.golang.org:443"
+      # GitHub (pi downloads fd/ripgrep from release assets)
+      - "github.com:443"
+      - "api.github.com:443"
+      - "codeload.github.com:443"
+      - "objects.githubusercontent.com:443"
+      - "raw.githubusercontent.com:443"
+      # docs & search
+      - "google.com:443"
+      - "www.google.com:443"
+      - "duckduckgo.com:443"
+      - "html.duckduckgo.com:443"
+      - "en.wikipedia.org:443"
+      - "stackoverflow.com:443"
+      - "developer.mozilla.org:443"
+      - "docs.rs:443"
+      - "doc.rust-lang.org:443"
+      - "docs.python.org:443"
+      - "nodejs.org:443"
+      - "go.dev:443"
+
+commands:
+  install:
+    - command: "sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-venv build-essential git jq"
+      description: Install base toolchain (python, pip, compilers, git)
+    - command: "python3 -m pip config set global.break-system-packages true"
+      description: Let pip install directly in the disposable VM (Ubuntu 24.04 PEP 668)
+    - command: "COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack enable npm pnpm yarn || (mkdir -p ~/.local/bin && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack enable --install-directory ~/.local/bin npm pnpm yarn)"
+      description: Expose real npm/pnpm/yarn shims (template ships only corepack)
+    - command: "npm install -g --ignore-scripts @earendil-works/pi-coding-agent || COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack npm install -g --ignore-scripts @earendil-works/pi-coding-agent"
+      description: Install pi (vanilla, official npm install per pi docs; corepack fallback)

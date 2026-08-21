@@ -540,25 +540,6 @@ install_aerospace() {
     success "AeroSpace done"
 }
 
-install_opencode() {
-    section "OpenCode (AI CLI Tool)"
-
-    if ! has opencode; then
-        info "Installing OpenCode..."
-        # Ensure npm is available
-        if has npm; then
-            npm install -g opencode
-        else
-            warn "npm not found - cannot install opencode. Install Node.js first."
-            return
-        fi
-    else
-        success "opencode already installed"
-    fi
-
-    success "OpenCode done"
-}
-
 # =============================================================================
 # Symlink Dotfiles
 # =============================================================================
@@ -612,9 +593,16 @@ symlink_dotfiles() {
     # Neovim
     create_symlink "$DOTFILES_DIR/nvim"         "$HOME/.config/nvim"
 
+    # pi-sbx (sandboxed pi coding agent; see pi-sbx/README.md — needs Docker sbx + Ollama)
+    create_symlink "$DOTFILES_DIR/pi-sbx/kit"              "$HOME/.config/pi-sbx/kit"
+    create_symlink "$DOTFILES_DIR/pi-sbx/pi-wrapper.sh"    "$HOME/.local/bin/pi"
+    create_symlink "$DOTFILES_DIR/pi-sbx/sandboxd.service" "$HOME/.config/systemd/user/sandboxd.service"
+
     # AeroSpace (macOS only)
     if [[ "$OS" == "macos" ]]; then
         create_symlink "$DOTFILES_DIR/aerospace.toml" "$HOME/.aerospace.toml"
+        # Ghostty macOS-only overrides (optionally included by ghostty/config)
+        create_symlink "$DOTFILES_DIR/ghostty/config-macos" "$HOME/.config/ghostty-macos.conf"
     fi
 
     # Check if backup dir was created
@@ -658,7 +646,7 @@ print_summary() {
     section "Installation Complete!"
 
     echo -e "${GREEN}Installed tools:${NC}"
-    local tools=(zsh starship ghostty tmux nvim git gh lazygit node python3 rustc go dotnet docker opencode)
+    local tools=(zsh starship ghostty tmux nvim git gh lazygit node python3 rustc go dotnet docker)
     for tool in "${tools[@]}"; do
         if has "$tool"; then
             echo -e "  ${GREEN}+${NC} $tool ($(command -v "$tool"))"
@@ -742,10 +730,6 @@ main() {
         if confirm "Install AeroSpace (tiling window manager)?"; then
             install_aerospace
         fi
-    fi
-
-    if confirm "Install OpenCode (AI CLI tool)?"; then
-        install_opencode
     fi
 
     # Symlinks

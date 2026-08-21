@@ -1,0 +1,9 @@
+[Unit]
+Description=Docker Sandboxes daemon (sandboxd)
+
+[Service]
+ExecStart=/usr/bin/sbx daemon start
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
