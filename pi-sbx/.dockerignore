@@ -1,0 +1,11 @@
+**
+!image/
+!image/Dockerfile
+!kit/
+!kit/files/
+!kit/files/home/
+!kit/files/home/.pi/
+!kit/files/home/.pi/agent/
+!kit/files/home/.pi/agent/package.json
+!kit/files/home/.pi/agent/package-lock.json
+!kit/files/home/.pi/agent/requirements-tools.txt

@@ -1,0 +1,6 @@
+# The parent dotfiles repository ignores Markdown globally. Pi setup Markdown
+# under this directory is intentional source and should remain reviewable.
+!**/*.md
+
+# Installed inside each sandbox from the pinned package lock; never vendor it.
+node_modules/

@@ -1,23 +1,46 @@
-# Sandbox kit: vanilla pi coding agent (per pi docs) talking to the host's Ollama.
+# Sandbox kit for the prebuilt local pi-sbx image, defaulting to Codex OAuth.
 # host.docker.internal is mapped by sbx to the host's localhost, so the
 # 127.0.0.1-bound Ollama is reachable; the egress policy sees that traffic as
 # "localhost:11434" (both forms allowed below). Model/provider config is
 # bundled under files/home/ and lands in /home/agent/.pi/agent/ at sandbox
-# creation: models.json registers the Ollama models, settings.json selects
-# the default so pi starts without an interactive model prompt.
-schemaVersion: "1"
+# creation: models.json registers optional Ollama models, while settings.json
+# selects GPT-5.6 Sol with high reasoning as the default.
+schemaVersion: "2"
 kind: sandbox
 name: pi
 displayName: Pi
-description: Vanilla pi coding agent (no extensions) using host Ollama.
+description: Sandboxed pi coding agent using Codex OAuth with optional host Ollama models.
 
 sandbox:
-  image: "docker/sandbox-templates:shell"
-  aiFilename: AGENTS.md
-  entrypoint:
-    run: [pi]
+  image: "pi-sbx:local"
+  entrypoint: [pi]
 
-caps:
+agentInstructions:
+  filename: AGENTS.md
+
+# OAuth is authorized once on the host with `sbx secret set openai --oauth`.
+# Pi requires a real JWT locally to derive the ChatGPT account id, so this uses
+# passthrough rather than the safer sentinel-only mode. The credential is copied
+# into each VM, never mounted from the host, and remains inaccessible to other
+# sandboxes and host paths.
+credentials:
+  - service: openai
+    description: Optional ChatGPT Plus/Pro authentication for Pi's Codex provider
+    oauth:
+      tokenEndpoint:
+        host: auth.openai.com
+        path: /oauth/token
+      sentinels:
+        accessToken: oai-oat01-proxy-managed
+        refreshToken: oai-ort01-proxy-managed
+      credentialFile:
+        path: "~/.pi/agent/auth.json"
+        template: '{"openai-codex":{"type":"oauth","access":"{{.AccessToken}}","refresh":"{{.RefreshToken}}","expires":{{.ExpiresAt}}}}'
+      resourceHosts:
+        - chatgpt.com
+      passthrough: true
+
+permissions:
   network:
     # Global whitelist for all pi sandboxes. Curated: model backend, package
     # registries, pi's fd/rg helper downloads, docs, and search. Everything
@@ -46,6 +69,9 @@ caps:
       - "codeload.github.com:443"
       - "objects.githubusercontent.com:443"
       - "raw.githubusercontent.com:443"
+      # OpenAI Codex subscription: OAuth login/refresh + model traffic
+      - "auth.openai.com:443"
+      - "chatgpt.com:443"
       # docs & search
       - "google.com:443"
       - "www.google.com:443"
@@ -60,13 +86,7 @@ caps:
       - "nodejs.org:443"
       - "go.dev:443"
 
-commands:
+setup:
   install:
-    - command: "sudo apt-get update && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-pip python3-venv build-essential git jq"
-      description: Install base toolchain (python, pip, compilers, git)
-    - command: "python3 -m pip config set global.break-system-packages true"
-      description: Let pip install directly in the disposable VM (Ubuntu 24.04 PEP 668)
-    - command: "COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack enable npm pnpm yarn || (mkdir -p ~/.local/bin && COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack enable --install-directory ~/.local/bin npm pnpm yarn)"
-      description: Expose real npm/pnpm/yarn shims (template ships only corepack)
-    - command: "npm install -g --ignore-scripts @earendil-works/pi-coding-agent || COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack npm install -g --ignore-scripts @earendil-works/pi-coding-agent"
-      description: Install pi (vanilla, official npm install per pi docs; corepack fallback)
+    - command: "bash ~/.pi/agent/scripts/reconcile-tools.sh"
+      description: Activate image-baked dependencies and generate user-scoped skills

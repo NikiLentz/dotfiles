@@ -1,0 +1,1 @@
+Pi session management should remain sandbox-local: prior sessions only need to be accessible within the same persistent sbx and do not need to survive sandbox deletion. <!-- created=2026-08-25, last=2026-08-25 -->

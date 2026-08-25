@@ -1,0 +1,16 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+
+export default function (pi: ExtensionAPI): void {
+	pi.registerCommand("exit", {
+		description: "Exit Pi",
+		handler: async (_args, ctx) => {
+			ctx.shutdown();
+		},
+	});
+
+	pi.on("input", (event, ctx) => {
+		if (event.text.trim() !== "exit") return;
+		ctx.shutdown();
+		return { action: "handled" };
+	});
+}
