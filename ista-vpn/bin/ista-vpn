@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+VM_NAME="ista-vpn"
+UPLINK_NETWORK="default"
+HOST_NETWORK="ista-host"
+ROUTE_HELPER="/usr/local/libexec/ista-vpn-route"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp}/ista-vpn-${UID}"
+PID_FILE="${RUNTIME_DIR}/indicator.pid"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+INDICATOR="${BASE_DIR}/libexec/ista-vpn-indicator"
+
+mkdir -p "${RUNTIME_DIR}"
+
+virsh_run() {
+    sg libvirt -c "virsh --connect qemu:///system $*"
+}
+
+network_active() {
+    virsh_run "net-info $1" 2>/dev/null | grep '^Active:.*yes$' >/dev/null
+}
+
+vm_running() {
+    [[ "$(virsh_run "domstate ${VM_NAME}" 2>/dev/null)" == "running" ]]
+}
+
+start_indicator() {
+    if [[ -r "${PID_FILE}" ]] && kill -0 "$(<"${PID_FILE}")" 2>/dev/null; then
+        return
+    fi
+    nohup "${INDICATOR}" "${SCRIPT_DIR}/ista-vpn" >"${RUNTIME_DIR}/indicator.log" 2>&1 &
+}
+
+open_viewer() {
+    nohup sg libvirt -c \
+        "virt-viewer --attach --connect qemu:///system ${VM_NAME}" \
+        >/dev/null 2>&1 &
+}
+
+connect_vpn() {
+    if ! network_active "${UPLINK_NETWORK}"; then
+        virsh_run "net-start ${UPLINK_NETWORK}" >/dev/null
+    fi
+
+    if ! network_active "${HOST_NETWORK}"; then
+        virsh_run "net-start ${HOST_NETWORK}" >/dev/null
+    fi
+
+    if ! vm_running; then
+        virsh_run "start ${VM_NAME}" >/dev/null
+    fi
+
+    start_indicator
+    open_viewer
+    printf 'Windows is opening. Start FortiClient and sign in.\n'
+}
+
+disconnect_vpn() {
+    if vm_running; then
+        virsh_run "managedsave ${VM_NAME} --running" >/dev/null
+    fi
+
+    sudo -n "${ROUTE_HELPER}" down || true
+
+    network_active "${HOST_NETWORK}" && virsh_run "net-destroy ${HOST_NETWORK}" >/dev/null
+    if [[ -z "$(virsh_run 'list --name')" ]] && network_active "${UPLINK_NETWORK}"; then
+        virsh_run "net-destroy ${UPLINK_NETWORK}" >/dev/null
+    fi
+
+    if [[ -r "${PID_FILE}" ]]; then
+        kill "$(<"${PID_FILE}")" 2>/dev/null || true
+    fi
+    rm -f "${PID_FILE}"
+    printf 'ISTA VPN VM stopped.\n'
+}
+
+show_status() {
+    if vm_running; then
+        printf 'ISTA VPN VM is running.\n'
+    else
+        printf 'ISTA VPN VM is stopped.\n'
+    fi
+}
+
+case "${1:-connect}" in
+    connect) connect_vpn ;;
+    disconnect) disconnect_vpn ;;
+    open) open_viewer ;;
+    status) show_status ;;
+    *) printf 'Usage: ista-vpn [connect|disconnect|open|status]\n' >&2; exit 2 ;;
+esac

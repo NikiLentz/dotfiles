@@ -495,6 +495,51 @@ install_build_tools() {
     success "Build Tools done"
 }
 
+install_ista_vpn() {
+    [[ "$OS" == "linux" ]] || return
+
+    section "ISTA VPN VM Helper"
+
+    case "$PKG" in
+        apt)
+            pkg_install \
+                qemu-system-x86 qemu-utils \
+                libvirt-daemon-system libvirt-clients \
+                virtinst virt-viewer ovmf swtpm swtpm-tools \
+                python3-gi gir1.2-ayatanaappindicator3-0.1
+            ;;
+        pacman)
+            pkg_install \
+                qemu-full libvirt virt-install virt-viewer \
+                edk2-ovmf swtpm python-gobject libayatana-appindicator
+            ;;
+    esac
+
+    sudo usermod -aG kvm,libvirt "$USER"
+    sudo install -d -m 755 /usr/local/libexec
+    sudo install -o root -g root -m 755 \
+        "$DOTFILES_DIR/ista-vpn/libexec/ista-vpn-route" \
+        /usr/local/libexec/ista-vpn-route
+    sudo visudo -cf "$DOTFILES_DIR/ista-vpn/ista-vpn.sudoers"
+    sudo install -o root -g root -m 440 \
+        "$DOTFILES_DIR/ista-vpn/ista-vpn.sudoers" \
+        /etc/sudoers.d/ista-vpn
+
+    sudo virsh --connect qemu:///system net-define \
+        "$DOTFILES_DIR/ista-vpn/ista-host-network.xml"
+    sudo virsh --connect qemu:///system net-autostart ista-host --disable
+    if sudo virsh --connect qemu:///system net-info default &>/dev/null; then
+        sudo virsh --connect qemu:///system net-autostart default --disable
+    fi
+    if sudo virsh --connect qemu:///system dominfo ista-vpn &>/dev/null; then
+        sudo virsh --connect qemu:///system autostart ista-vpn --disable
+    else
+        warn "The ista-vpn VM is not present; its Windows disk must be restored separately"
+    fi
+
+    success "ISTA VPN helper installed (group membership applies after the next login)"
+}
+
 install_fonts() {
     section "Fonts (MesloLGM Nerd Font)"
 
@@ -598,6 +643,13 @@ symlink_dotfiles() {
     create_symlink "$DOTFILES_DIR/pi-sbx/pi-wrapper.sh"    "$HOME/.local/bin/pi"
     create_symlink "$DOTFILES_DIR/pi-sbx/sandboxd.service" "$HOME/.config/systemd/user/sandboxd.service"
 
+    if [[ "$OS" == "linux" ]]; then
+        create_symlink "$DOTFILES_DIR/ista-vpn/bin/ista-vpn" "$HOME/.local/bin/ista-vpn"
+        create_symlink "$DOTFILES_DIR/ista-vpn/libexec/ista-vpn-indicator" "$HOME/.local/libexec/ista-vpn-indicator"
+        create_symlink "$DOTFILES_DIR/ista-vpn/remmina/ista-vdma-prod.remmina" "$HOME/.local/share/remmina/ista-vdma-prod.remmina"
+        create_symlink "$DOTFILES_DIR/ista-vpn/remmina/ista-vdma-staging.remmina" "$HOME/.local/share/remmina/ista-vdma-staging.remmina"
+    fi
+
     # AeroSpace (macOS only)
     if [[ "$OS" == "macos" ]]; then
         create_symlink "$DOTFILES_DIR/aerospace.toml" "$HOME/.aerospace.toml"
@@ -646,7 +698,7 @@ print_summary() {
     section "Installation Complete!"
 
     echo -e "${GREEN}Installed tools:${NC}"
-    local tools=(zsh starship ghostty tmux nvim git gh lazygit node python3 rustc go dotnet docker)
+    local tools=(zsh starship ghostty tmux nvim git gh lazygit node python3 rustc go dotnet docker ista-vpn)
     for tool in "${tools[@]}"; do
         if has "$tool"; then
             echo -e "  ${GREEN}+${NC} $tool ($(command -v "$tool"))"
@@ -720,6 +772,12 @@ main() {
 
     if confirm "Install Build Tools (make, cmake, gcc)?"; then
         install_build_tools
+    fi
+
+    if [[ "$OS" == "linux" ]]; then
+        if confirm "Install ISTA VPN VM helper?" "n"; then
+            install_ista_vpn
+        fi
     fi
 
     if confirm "Install Fonts (MesloLGM Nerd Font)?"; then

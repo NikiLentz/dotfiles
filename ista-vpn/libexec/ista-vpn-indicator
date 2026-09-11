@@ -1,0 +1,172 @@
+#!/usr/bin/env python3
+import os
+import signal
+import subprocess
+import sys
+import threading
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("AyatanaAppIndicator3", "0.1")
+from gi.repository import AyatanaAppIndicator3, GLib, Gtk
+
+
+helper = os.path.abspath(sys.argv[1])
+runtime_dir = os.path.join(
+    os.environ.get("XDG_RUNTIME_DIR", "/tmp"), f"ista-vpn-{os.getuid()}"
+)
+pid_file = os.path.join(runtime_dir, "indicator.pid")
+ssh_key = os.path.expanduser("~/.ssh/ista-vpn")
+route_helper = "/usr/local/libexec/ista-vpn-route"
+rdp_profiles = {
+    "ISTA VDMA PROD": os.path.expanduser(
+        "~/.local/share/remmina/ista-vdma-prod.remmina"
+    ),
+    "ISTA VDMA STAGING": os.path.expanduser(
+        "~/.local/share/remmina/ista-vdma-staging.remmina"
+    ),
+}
+os.makedirs(runtime_dir, exist_ok=True)
+route_active = False
+check_in_progress = False
+rdp_items = []
+
+
+def run_helper(command):
+    subprocess.Popen([helper, command], start_new_session=True)
+
+
+def run_rdp(profile):
+    environment = os.environ.copy()
+    environment["GDK_BACKEND"] = "x11"
+    subprocess.Popen(
+        ["remmina", "--connect", profile],
+        env=environment,
+        start_new_session=True,
+    )
+
+
+def vm_is_running():
+    result = subprocess.run(
+        ["sg", "libvirt", "-c", "virsh --connect qemu:///system domstate ista-vpn"],
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode == 0 and result.stdout.strip() == "running"
+
+
+def vpn_is_connected():
+    try:
+        result = subprocess.run(
+            [
+                "ssh",
+                "-i",
+                ssh_key,
+                "-o",
+                "BatchMode=yes",
+                "-o",
+                "ConnectTimeout=3",
+                "niki@192.168.137.1",
+                'netsh.exe interface show interface name="Ethernet 3"',
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        if result.returncode != 0:
+            return False
+        return "Connect state:" in result.stdout and "Connected" in result.stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def set_route(enabled):
+    global route_active
+    if route_active == enabled:
+        return
+    action = "up" if enabled else "down"
+    result = subprocess.run(["sudo", "-n", route_helper, action])
+    if result.returncode == 0:
+        route_active = enabled
+
+
+def apply_vpn_state(connected):
+    global check_in_progress
+    set_route(connected)
+    for item in rdp_items:
+        item.set_sensitive(connected)
+    check_in_progress = False
+    return False
+
+
+def check_vpn_worker():
+    connected = vpn_is_connected()
+    GLib.idle_add(apply_vpn_state, connected)
+
+
+def poll_vm():
+    global check_in_progress
+    if not vm_is_running():
+        set_route(False)
+        Gtk.main_quit()
+        return False
+    if not check_in_progress:
+        check_in_progress = True
+        threading.Thread(target=check_vpn_worker, daemon=True).start()
+    return True
+
+
+def quit_cleanly(*_args):
+    set_route(False)
+    Gtk.main_quit()
+
+
+with open(pid_file, "w", encoding="ascii") as handle:
+    handle.write(str(os.getpid()))
+
+indicator = AyatanaAppIndicator3.Indicator.new(
+    "ista-vpn", "network-vpn-symbolic", AyatanaAppIndicator3.IndicatorCategory.SYSTEM_SERVICES
+)
+indicator.set_status(AyatanaAppIndicator3.IndicatorStatus.ACTIVE)
+indicator.set_title("ISTA VPN")
+
+menu = Gtk.Menu()
+title = Gtk.MenuItem(label="ISTA VPN VM")
+title.set_sensitive(False)
+menu.append(title)
+
+open_item = Gtk.MenuItem(label="Open Windows")
+open_item.connect("activate", lambda *_: run_helper("open"))
+menu.append(open_item)
+
+menu.append(Gtk.SeparatorMenuItem())
+for rdp_name, rdp_profile in rdp_profiles.items():
+    rdp_item = Gtk.MenuItem(label=rdp_name)
+    rdp_item.set_sensitive(False)
+    rdp_item.connect("activate", lambda _item, profile=rdp_profile: run_rdp(profile))
+    menu.append(rdp_item)
+    rdp_items.append(rdp_item)
+
+menu.append(Gtk.SeparatorMenuItem())
+
+disconnect_item = Gtk.MenuItem(label="Disconnect and stop")
+disconnect_item.connect("activate", lambda *_: run_helper("disconnect"))
+menu.append(disconnect_item)
+
+menu.show_all()
+indicator.set_menu(menu)
+
+signal.signal(signal.SIGTERM, quit_cleanly)
+signal.signal(signal.SIGINT, quit_cleanly)
+GLib.timeout_add_seconds(5, poll_vm)
+
+try:
+    Gtk.main()
+finally:
+    set_route(False)
+    try:
+        if os.path.exists(pid_file) and open(pid_file, encoding="ascii").read().strip() == str(os.getpid()):
+            os.unlink(pid_file)
+    except OSError:
+        pass

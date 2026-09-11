@@ -1,0 +1,24 @@
+[remmina]
+name=ISTA VDMA PROD
+group=ISTA VPN
+protocol=RDP
+server=10.48.108.18
+username=specificgroup
+password=.
+domain=
+resolution_mode=2
+scale=2
+colordepth=99
+network=none
+security=
+cert_ignore=0
+disableclipboard=0
+vc=cliprdr
+sharesmartcard=0
+shareprinter=0
+sharefolder=
+sound=local
+microphone=0
+disableautoreconnect=0
+console=0
+window_maximize=1

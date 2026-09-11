@@ -1,0 +1,7 @@
+<network>
+  <name>ista-host</name>
+  <uuid>562b0f0a-7138-4fff-86dd-f06461876dad</uuid>
+  <bridge name="virbr-ista" stp="off" delay="0"/>
+  <domain name="ista-host"/>
+  <ip address="192.168.137.2" netmask="255.255.255.0"/>
+</network>

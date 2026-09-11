@@ -1,0 +1,2 @@
+niki ALL=(root) NOPASSWD: /usr/local/libexec/ista-vpn-route up
+niki ALL=(root) NOPASSWD: /usr/local/libexec/ista-vpn-route down

@@ -1,0 +1,24 @@
+#!/bin/sh
+set -eu
+
+gateway='192.168.137.1'
+interface='virbr-ista'
+networks='209.177.169.0/24 192.168.3.100/32 192.168.3.99/32 192.168.0.0/16 37.0.5.0/24 37.0.1.0/24 10.120.0.0/13 10.49.0.0/16 10.48.0.0/16 10.43.0.0/16 7.0.1.0/24'
+
+case "${1:-}" in
+    up)
+        for network in $networks; do
+            /usr/sbin/ip -4 route replace "$network" via "$gateway" dev "$interface"
+        done
+        ;;
+    down)
+        for network in $networks; do
+            /usr/sbin/ip -4 route del "$network" via "$gateway" dev "$interface" \
+                2>/dev/null || true
+        done
+        ;;
+    *)
+        echo 'Usage: ista-vpn-route up|down' >&2
+        exit 2
+        ;;
+esac
